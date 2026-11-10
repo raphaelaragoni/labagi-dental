@@ -36,7 +36,8 @@ import {
   X,
   FileCheck,
   UserCheck,
-  DollarSign
+  DollarSign,
+  BarChart3
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -70,6 +71,7 @@ const TABELA_LABAGI = [
 
 function App() {
   const [currentUserRole, setCurrentUserRole] = useState('admin');
+  const [activeTab, setActiveTab] = useState('os'); // 'os' ou 'contabilidade'
   const [jobs, setJobs] = useState([]);
   const [cadistasList, setCadistasList] = useState([
     { id: '1', nome: 'Arthur Cardoso' },
@@ -179,7 +181,7 @@ function App() {
       }
 
       const qtdElementos = Number(formData.elementosCount) || 1;
-      const custoCadistaTotal = qtdElementos * 30;
+      const custoCadistaTotal = qtdElementos * 30; // R$ 30 por coroa para o cadista
 
       await addDoc(collection(db, "ordens_servico"), {
         codigoOS: `OS-2026-${Math.floor(100 + Math.random() * 900)}`,
@@ -236,13 +238,35 @@ function App() {
     }
   };
 
+  // Filtrar OS para Cadista (ver apenas os atribuidos a ele) ou Admin/Dentista
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = (job.paciente || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (job.dentista || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (job.codigoOS || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'Todos' || job.status === filterStatus;
+    
+    if (currentUserRole === 'cadista') {
+      return matchesSearch && matchesStatus; // Aqui pode refinar se quiser filtrar estritamente pelo nome do cadista logado
+    }
     return matchesSearch && matchesStatus;
   });
+
+  // Agrupamento para Contabilidade
+  const contabilidadePorDentista = jobs.reduce((acc, job) => {
+    const dentista = job.dentista || 'Não informado';
+    if (!acc[dentista]) acc[dentista] = { totalOS: 0, faturamento: 0 };
+    acc[dentista].totalOS += 1;
+    acc[dentista].faturamento += Number(job.valorTotal) || 0;
+    return acc;
+  }, {});
+
+  const contabilidadePorCadista = jobs.reduce((acc, job) => {
+    const cadista = job.cadista || 'Não atribuído';
+    if (!acc[cadista]) acc[cadista] = { totalOS: 0, repasseTotal: 0 };
+    acc[cadista].totalOS += 1;
+    acc[cadista].repasseTotal += Number(job.custoCadista) || 0;
+    return acc;
+  }, {});
 
   const stats = {
     total: jobs.length,
@@ -268,19 +292,19 @@ function App() {
         <div className="flex items-center gap-3 bg-slate-900/80 p-1.5 rounded-xl border border-slate-700">
           <span className="text-xs text-slate-400 px-2 font-medium">Perfil:</span>
           <button 
-            onClick={() => setCurrentUserRole('admin')} 
+            onClick={() => { setCurrentUserRole('admin'); setActiveTab('os'); }} 
             className={`px-3 py-1.5 text-xs rounded-lg transition-all ${currentUserRole === 'admin' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'}`}
           >
             Admin Lab
           </button>
           <button 
-            onClick={() => setCurrentUserRole('cadista')} 
+            onClick={() => { setCurrentUserRole('cadista'); setActiveTab('os'); }} 
             className={`px-3 py-1.5 text-xs rounded-lg transition-all ${currentUserRole === 'cadista' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'}`}
           >
             Cadista
           </button>
           <button 
-            onClick={() => setCurrentUserRole('dentista')} 
+            onClick={() => { setCurrentUserRole('dentista'); setActiveTab('os'); }} 
             className={`px-3 py-1.5 text-xs rounded-lg transition-all ${currentUserRole === 'dentista' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'}`}
           >
             Dentista
@@ -299,15 +323,21 @@ function App() {
               {currentUserRole === 'dentista' && "Área do Cliente (Dentista)"}
             </h2>
             <p className="text-slate-400 text-sm mt-1">
-              {currentUserRole === 'admin' && "Gestão completa de OS, financeiro e repasses para cadistas."}
-              {currentUserRole === 'cadista' && "Acompanhe seus trabalhos e baixe os escaneamentos 3D."}
-              {currentUserRole === 'dentista' && "Acompanhe o andamento das suas próteses em produção."}
+              {currentUserRole === 'admin' && "Gestão operacional, tabela de preços e contabilidade segregada."}
+              {currentUserRole === 'cadista' && "Visualize os trabalhos atribuídos e baixe os arquivos 3D."}
+              {currentUserRole === 'dentista' && "Acompanhe o andamento dos seus trabalhos em produção."}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
             {currentUserRole === 'admin' && (
               <>
+                <button 
+                  onClick={() => setActiveTab(activeTab === 'os' ? 'contabilidade' : 'os')}
+                  className={`px-3.5 py-2.5 rounded-xl flex items-center gap-2 text-xs font-medium transition ${activeTab === 'contabilidade' ? 'bg-emerald-600 text-white' : 'bg-slate-700 hover:bg-slate-600 text-white'}`}
+                >
+                  <BarChart3 className="w-4 h-4" /> {activeTab === 'os' ? 'Contabilidade / Repasses' : 'Ver Ordens de Serviço'}
+                </button>
                 <button 
                   onClick={() => setShowCadistaModal(true)}
                   className="bg-slate-700 hover:bg-slate-600 text-white px-3.5 py-2.5 rounded-xl flex items-center gap-2 text-xs font-medium transition"
@@ -320,186 +350,241 @@ function App() {
                 >
                   <UserPlus className="w-4 h-4 text-blue-400" /> Convidar Dentista
                 </button>
+                <button 
+                  onClick={() => setShowNewOSModal(true)}
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-semibold shadow-lg shadow-blue-500/20 transition"
+                >
+                  <Plus className="w-4 h-4" /> Nova Ordem de Serviço
+                </button>
               </>
             )}
-            <button 
-              onClick={() => setShowNewOSModal(true)}
-              className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-semibold shadow-lg shadow-blue-500/20 transition"
-            >
-              <Plus className="w-4 h-4" /> Nova Ordem de Serviço
-            </button>
           </div>
         </div>
 
-        {/* Métricas Financeiras (EXCLUSIVAS PARA O ADMIN) */}
-        {currentUserRole === 'admin' && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
-              <div>
-                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Trabalhos</p>
-                <p className="text-2xl font-bold mt-1">{stats.total}</p>
+        {/* CONTEÚDO: SE ESTIVER NA ABA DE CONTABILIDADE (APENAS ADMIN) */}
+        {currentUserRole === 'admin' && activeTab === 'contabilidade' ? (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Contabilidade por Dentista */}
+              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-xl">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-3">
+                  <DollarSign className="w-5 h-5 text-emerald-400" /> Faturamento por Dentista (Clientes)
+                </h3>
+                <div className="space-y-3">
+                  {Object.keys(contabilidadePorDentista).length === 0 ? (
+                    <p className="text-xs text-slate-500">Nenhum dado financeiro registrado.</p>
+                  ) : (
+                    Object.entries(contabilidadePorDentista).map(([dentista, dados], idx) => (
+                      <div key={idx} className="bg-slate-900/60 border border-slate-700/60 p-3.5 rounded-xl flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-200 text-sm">{dentista}</p>
+                          <p className="text-xs text-slate-400">{dados.totalOS} trabalho(s) executado(s)</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-emerald-400">R$ {dados.faturamento.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-              <FileText className="w-8 h-8 text-blue-400 opacity-80" />
-            </div>
 
-            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
-              <div>
-                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Faturamento Lab</p>
-                <p className="text-2xl font-bold mt-1 text-emerald-400">R$ {stats.faturamentoTotal.toFixed(2)}</p>
+              {/* Contabilidade por Cadista (Repasses R$ 30/coroa) */}
+              <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-xl">
+                <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-3">
+                  <Users className="w-5 h-5 text-amber-400" /> Repasses por Cadista (R$ 30/coroa)
+                </h3>
+                <div className="space-y-3">
+                  {Object.keys(contabilidadePorCadista).length === 0 ? (
+                    <p className="text-xs text-slate-500">Nenhum repasse registrado.</p>
+                  ) : (
+                    Object.entries(contabilidadePorCadista).map(([cadista, dados], idx) => (
+                      <div key={idx} className="bg-slate-900/60 border border-slate-700/60 p-3.5 rounded-xl flex items-center justify-between">
+                        <div>
+                          <p className="font-semibold text-slate-200 text-sm">{cadista}</p>
+                          <p className="text-xs text-slate-400">{dados.totalOS} projeto(s) associado(s)</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-sm font-bold text-amber-400">R$ {dados.repasseTotal.toFixed(2)}</p>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
-              <DollarSign className="w-8 h-8 text-emerald-400 opacity-80" />
-            </div>
-
-            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
-              <div>
-                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Repasse Cadistas</p>
-                <p className="text-2xl font-bold mt-1 text-amber-400">R$ {stats.custoCadistasTotal.toFixed(2)}</p>
-              </div>
-              <Users className="w-8 h-8 text-amber-400 opacity-80" />
-            </div>
-
-            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
-              <div>
-                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Concluídos</p>
-                <p className="text-2xl font-bold mt-1 text-sky-400">{stats.concluidos}</p>
-              </div>
-              <CheckCircle2 className="w-8 h-8 text-sky-400 opacity-80" />
             </div>
           </div>
-        )}
+        ) : (
+          /* CONTEÚDO PADRÃO: TABELA DE ORDENS DE SERVIÇO */
+          <>
+            {currentUserRole === 'admin' && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+                  <div>
+                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Trabalhos</p>
+                    <p className="text-2xl font-bold mt-1">{stats.total}</p>
+                  </div>
+                  <FileText className="w-8 h-8 text-blue-400 opacity-80" />
+                </div>
 
-        {/* Tabela de OS */}
-        <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
-          <div className="p-4 border-b border-slate-700 flex flex-wrap items-center justify-between gap-4 bg-slate-900/50">
-            <div className="relative flex-1 min-w-[240px]">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input 
-                type="text" 
-                placeholder="Buscar por OS, dentista ou paciente..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full bg-slate-900 border border-slate-700 text-sm rounded-xl pl-9 pr-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
-              />
-            </div>
-            <select 
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-2 text-slate-200 focus:outline-none"
-            >
-              <option value="Todos">Todos os Status</option>
-              <option value="Pendente">Pendente</option>
-              <option value="Em Produção">Em Produção</option>
-              <option value="Concluído">Concluído</option>
-            </select>
-          </div>
+                <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+                  <div>
+                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Faturamento Lab</p>
+                    <p className="text-2xl font-bold mt-1 text-emerald-400">R$ {stats.faturamentoTotal.toFixed(2)}</p>
+                  </div>
+                  <DollarSign className="w-8 h-8 text-emerald-400 opacity-80" />
+                </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs text-slate-300">
-              <thead className="bg-slate-900/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700">
-                <tr>
-                  <th className="px-6 py-4">Código OS</th>
-                  <th className="px-6 py-4">Dentista / Paciente</th>
-                  <th className="px-6 py-4">Serviço / Elementos</th>
-                  <th className="px-6 py-4">Cadista Responsável</th>
-                  <th className="px-6 py-4">Prazo</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4 text-right">Arquivo 3D</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-700/50">
-                {filteredJobs.length === 0 ? (
-                  <tr>
-                    <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
-                      Nenhuma ordem de serviço cadastrada.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredJobs.map((job) => (
-                    <tr key={job.id} className="hover:bg-slate-700/30 transition">
-                      <td className="px-6 py-4 font-mono font-bold text-blue-400">
-                        {job.codigoOS}
-                        {/* VALORES VISÍVEIS APENAS PARA O ADMIN */}
-                        {currentUserRole === 'admin' && (
-                          <div className="mt-1">
-                            <span className="text-[10px] text-emerald-400 block">Lab: R$ {job.valorTotal || 0}</span>
-                            <span className="text-[10px] text-amber-400 block">Cadista: R$ {job.custoCadista || 0}</span>
-                          </div>
-                        )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="font-semibold text-slate-200">{job.dentista}</p>
-                        <p className="text-[11px] text-slate-400">Pac: {job.paciente}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        <p className="text-slate-200 font-medium">{job.servico}</p>
-                        <p className="text-[11px] text-slate-400">{job.elementosCount || 1} un(s) | Dente: {job.dente}</p>
-                      </td>
-                      <td className="px-6 py-4">
-                        {currentUserRole === 'admin' ? (
-                          <select
-                            value={job.cadista || 'Não atribuído'}
-                            onChange={(e) => handleAssignCadista(job.id, e.target.value)}
-                            className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none"
-                          >
-                            <option value="Não atribuído">Terceirizar...</option>
-                            {cadistasList.map(c => (
-                              <option key={c.id} value={c.nome}>{c.nome}</option>
-                            ))}
-                          </select>
-                        ) : (
-                          <span className="text-slate-300 font-medium">{job.cadista || 'Não atribuído'}</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-slate-300">{job.prazo}</td>
-                      <td className="px-6 py-4">
-                        {currentUserRole === 'dentista' ? (
-                          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${
-                            job.status === 'Concluído' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' :
-                            job.status === 'Em Produção' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
-                            'bg-slate-900 text-sky-400 border-slate-700'
-                          }`}>
-                            {job.status}
-                          </span>
-                        ) : (
-                          <select
-                            value={job.status}
-                            onChange={(e) => handleStatusChange(job.id, e.target.value)}
-                            className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border focus:outline-none ${
-                              job.status === 'Concluído' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' :
-                              job.status === 'Em Produção' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
-                              'bg-slate-900 text-sky-400 border-slate-700'
-                            }`}
-                          >
-                            <option value="Pendente">Pendente</option>
-                            <option value="Em Produção">Em Produção</option>
-                            <option value="Concluído">Concluído</option>
-                          </select>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {job.arquivoUrl ? (
-                          <a 
-                            href={job.arquivoUrl} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 font-medium bg-blue-950/40 border border-blue-800/60 px-2.5 py-1 rounded-lg transition"
-                          >
-                            <Download className="w-3.5 h-3.5" /> Baixar STL
-                          </a>
-                        ) : (
-                          <span className="text-slate-500 text-[11px]">Sem arquivo</span>
-                        )}
-                      </td>
+                <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+                  <div>
+                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Repasse Cadistas</p>
+                    <p className="text-2xl font-bold mt-1 text-amber-400">R$ {stats.custoCadistasTotal.toFixed(2)}</p>
+                  </div>
+                  <Users className="w-8 h-8 text-amber-400 opacity-80" />
+                </div>
+
+                <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+                  <div>
+                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Concluídos</p>
+                    <p className="text-2xl font-bold mt-1 text-sky-400">{stats.concluidos}</p>
+                  </div>
+                  <CheckCircle2 className="w-8 h-8 text-sky-400 opacity-80" />
+                </div>
+              </div>
+            )}
+
+            <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
+              <div className="p-4 border-b border-slate-700 flex flex-wrap items-center justify-between gap-4 bg-slate-900/50">
+                <div className="relative flex-1 min-w-[240px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input 
+                    type="text" 
+                    placeholder="Buscar por OS, dentista ou paciente..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 text-sm rounded-xl pl-9 pr-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+                <select 
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-2 text-slate-200 focus:outline-none"
+                >
+                  <option value="Todos">Todos os Status</option>
+                  <option value="Pendente">Pendente</option>
+                  <option value="Em Produção">Em Produção</option>
+                  <option value="Concluído">Concluído</option>
+                </select>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs text-slate-300">
+                  <thead className="bg-slate-900/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700">
+                    <tr>
+                      <th className="px-6 py-4">Código OS</th>
+                      <th className="px-6 py-4">Dentista / Paciente</th>
+                      <th className="px-6 py-4">Serviço / Elementos</th>
+                      <th className="px-6 py-4">Cadista Responsável</th>
+                      <th className="px-6 py-4">Prazo</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Arquivo 3D</th>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
+                  </thead>
+                  <tbody className="divide-y divide-slate-700/50">
+                    {filteredJobs.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-8 text-center text-slate-500">
+                          Nenhuma ordem de serviço cadastrada.
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredJobs.map((job) => (
+                        <tr key={job.id} className="hover:bg-slate-700/30 transition">
+                          <td className="px-6 py-4 font-mono font-bold text-blue-400">
+                            {job.codigoOS}
+                            {currentUserRole === 'admin' && (
+                              <div className="mt-1">
+                                <span className="text-[10px] text-emerald-400 block">Lab: R$ {job.valorTotal || 0}</span>
+                                <span className="text-[10px] text-amber-400 block">Cadista: R$ {job.custoCadista || 0}</span>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="font-semibold text-slate-200">{job.dentista}</p>
+                            <p className="text-[11px] text-slate-400">Pac: {job.paciente}</p>
+                          </td>
+                          <td className="px-6 py-4">
+                            <p className="text-slate-200 font-medium">{job.servico}</p>
+                            <p className="text-[11px] text-slate-400">{job.elementosCount || 1} un(s) | Dente: {job.dente}</p>
+                          </td>
+                          <td className="px-6 py-4">
+                            {currentUserRole === 'admin' ? (
+                              <select
+                                value={job.cadista || 'Não atribuído'}
+                                onChange={(e) => handleAssignCadista(job.id, e.target.value)}
+                                className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none"
+                              >
+                                <option value="Não atribuído">Terceirizar...</option>
+                                {cadistasList.map(c => (
+                                  <option key={c.id} value={c.nome}>{c.nome}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-slate-300 font-medium">{job.cadista || 'Não atribuído'}</span>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-slate-300">{job.prazo}</td>
+                          <td className="px-6 py-4">
+                            {currentUserRole === 'dentista' ? (
+                              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${
+                                job.status === 'Concluído' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' :
+                                job.status === 'Em Produção' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
+                                'bg-slate-900 text-sky-400 border-slate-700'
+                              }`}>
+                                {job.status}
+                              </span>
+                            ) : (
+                              <select
+                                value={job.status}
+                                onChange={(e) => handleStatusChange(job.id, e.target.value)}
+                                className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border focus:outline-none ${
+                                  job.status === 'Concluído' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' :
+                                  job.status === 'Em Produção' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
+                                  'bg-slate-900 text-sky-400 border-slate-700'
+                                }`}
+                              >
+                                <option value="Pendente">Pendente</option>
+                                <option value="Em Produção">Em Produção</option>
+                                <option value="Concluído">Concluído</option>
+                              </select>
+                            )}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {job.arquivoUrl ? (
+                              <a 
+                                href={job.arquivoUrl} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 text-blue-400 hover:text-blue-300 font-medium bg-blue-950/40 border border-blue-800/60 px-2.5 py-1 rounded-lg transition"
+                              >
+                                <Download className="w-3.5 h-3.5" /> Baixar STL
+                              </a>
+                            ) : (
+                              <span className="text-slate-500 text-[11px]">Sem arquivo</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </>
+        )}
       </main>
 
-      {/* Modal Cadastrar Cadista */}
+      {/* Modais (Cadista, Convite, Nova OS) */}
       {showCadistaModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
@@ -509,7 +594,6 @@ function App() {
               </h3>
               <button onClick={() => setShowCadistaModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-
             <form onSubmit={handleCreateCadista} className="space-y-3 text-xs">
               <div>
                 <label className="block text-slate-400 mb-1">Nome Completo *</label>
@@ -551,7 +635,6 @@ function App() {
         </div>
       )}
 
-      {/* Modal Convidar Dentista */}
       {showInviteModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
@@ -571,7 +654,6 @@ function App() {
         </div>
       )}
 
-      {/* Modal Nova OS */}
       {showNewOSModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
@@ -631,7 +713,7 @@ function App() {
                     onChange={(e) => setFormData({...formData, elementosCount: e.target.value})}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
-                  <p className="text-[10px] text-amber-400 mt-0.5">Custo cadista interno: R$ {Number(formData.elementosCount || 1) * 30}</p>
+                  <p className="text-[10px] text-amber-400 mt-0.5">Custo cadista: R$ {Number(formData.elementosCount || 1) * 30}</p>
                 </div>
               </div>
 
