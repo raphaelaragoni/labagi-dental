@@ -71,7 +71,7 @@ const TABELA_LABAGI = [
 
 function App() {
   const [currentUserRole, setCurrentUserRole] = useState('admin');
-  const [activeTab, setActiveTab] = useState('os'); // 'os' ou 'contabilidade'
+  const [activeTab, setActiveTab] = useState('os');
   const [jobs, setJobs] = useState([]);
   const [cadistasList, setCadistasList] = useState([
     { id: '1', nome: 'Arthur Cardoso' },
@@ -181,18 +181,23 @@ function App() {
       }
 
       const qtdElementos = Number(formData.elementosCount) || 1;
-      const custoCadistaTotal = qtdElementos * 30; // R$ 30 por coroa para o cadista
+      const custoCadistaTotal = qtdElementos * 30;
+
+      // Se for dentista criando, assume o nome dele ou o preenchido no form
+      const nomeDentista = currentUserRole === 'dentista' 
+        ? (formData.dentista || 'Dr. Cliente') 
+        : (formData.dentista || 'Dr. Roberto Silva');
 
       await addDoc(collection(db, "ordens_servico"), {
         codigoOS: `OS-2026-${Math.floor(100 + Math.random() * 900)}`,
-        dentista: formData.dentista || 'Dr. Roberto Silva',
+        dentista: nomeDentista,
         paciente: formData.paciente,
         servico: formData.servico,
         elementosCount: qtdElementos,
         valorTotal: Number(formData.valorServico) * qtdElementos,
         custoCadista: custoCadistaTotal,
         dente: formData.dente || 'Geral',
-        cadista: formData.cadista,
+        cadista: currentUserRole === 'dentista' ? 'Não atribuído' : formData.cadista,
         status: 'Pendente',
         prazo: formData.prazo || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
         arquivoNome: fileName,
@@ -238,20 +243,14 @@ function App() {
     }
   };
 
-  // Filtrar OS para Cadista (ver apenas os atribuidos a ele) ou Admin/Dentista
   const filteredJobs = jobs.filter(job => {
     const matchesSearch = (job.paciente || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (job.dentista || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
                           (job.codigoOS || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesStatus = filterStatus === 'Todos' || job.status === filterStatus;
-    
-    if (currentUserRole === 'cadista') {
-      return matchesSearch && matchesStatus; // Aqui pode refinar se quiser filtrar estritamente pelo nome do cadista logado
-    }
     return matchesSearch && matchesStatus;
   });
 
-  // Agrupamento para Contabilidade
   const contabilidadePorDentista = jobs.reduce((acc, job) => {
     const dentista = job.dentista || 'Não informado';
     if (!acc[dentista]) acc[dentista] = { totalOS: 0, faturamento: 0 };
@@ -325,7 +324,7 @@ function App() {
             <p className="text-slate-400 text-sm mt-1">
               {currentUserRole === 'admin' && "Gestão operacional, tabela de preços e contabilidade segregada."}
               {currentUserRole === 'cadista' && "Visualize os trabalhos atribuídos e baixe os arquivos 3D."}
-              {currentUserRole === 'dentista' && "Acompanhe o andamento dos seus trabalhos em produção."}
+              {currentUserRole === 'dentista' && "Envie novas Ordens de Serviço e acompanhe o andamento dos seus trabalhos."}
             </p>
           </div>
 
@@ -350,22 +349,25 @@ function App() {
                 >
                   <UserPlus className="w-4 h-4 text-blue-400" /> Convidar Dentista
                 </button>
-                <button 
-                  onClick={() => setShowNewOSModal(true)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-semibold shadow-lg shadow-blue-500/20 transition"
-                >
-                  <Plus className="w-4 h-4" /> Nova Ordem de Serviço
-                </button>
               </>
+            )}
+
+            {/* BOTÃO NOVA OS VISÍVEL PARA ADMIN E DENTISTA */}
+            {(currentUserRole === 'admin' || currentUserRole === 'dentista') && (
+              <button 
+                onClick={() => setShowNewOSModal(true)}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-semibold shadow-lg shadow-blue-500/20 transition"
+              >
+                <Plus className="w-4 h-4" /> Nova Ordem de Serviço
+              </button>
             )}
           </div>
         </div>
 
-        {/* CONTEÚDO: SE ESTIVER NA ABA DE CONTABILIDADE (APENAS ADMIN) */}
+        {/* CONTEÚDO: CONTABILIDADE (ADMIN) */}
         {currentUserRole === 'admin' && activeTab === 'contabilidade' ? (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Contabilidade por Dentista */}
               <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-xl">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-3">
                   <DollarSign className="w-5 h-5 text-emerald-400" /> Faturamento por Dentista (Clientes)
@@ -389,7 +391,6 @@ function App() {
                 </div>
               </div>
 
-              {/* Contabilidade por Cadista (Repasses R$ 30/coroa) */}
               <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-xl">
                 <h3 className="text-lg font-bold text-white flex items-center gap-2 border-b border-slate-700 pb-3">
                   <Users className="w-5 h-5 text-amber-400" /> Repasses por Cadista (R$ 30/coroa)
@@ -415,7 +416,6 @@ function App() {
             </div>
           </div>
         ) : (
-          /* CONTEÚDO PADRÃO: TABELA DE ORDENS DE SERVIÇO */
           <>
             {currentUserRole === 'admin' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -584,7 +584,7 @@ function App() {
         )}
       </main>
 
-      {/* Modais (Cadista, Convite, Nova OS) */}
+      {/* Modais */}
       {showCadistaModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
@@ -713,7 +713,9 @@ function App() {
                     onChange={(e) => setFormData({...formData, elementosCount: e.target.value})}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
-                  <p className="text-[10px] text-amber-400 mt-0.5">Custo cadista: R$ {Number(formData.elementosCount || 1) * 30}</p>
+                  {currentUserRole === 'admin' && (
+                    <p className="text-[10px] text-amber-400 mt-0.5">Custo cadista: R$ {Number(formData.elementosCount || 1) * 30}</p>
+                  )}
                 </div>
               </div>
 
@@ -728,19 +730,21 @@ function App() {
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">Cadista Responsável</label>
-                  <select 
-                    value={formData.cadista}
-                    onChange={(e) => setFormData({...formData, cadista: e.target.value})}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                  >
-                    <option value="Não atribuído">Terceirizar...</option>
-                    {cadistasList.map(c => (
-                      <option key={c.id} value={c.nome}>{c.nome}</option>
-                    ))}
-                  </select>
-                </div>
+                {currentUserRole === 'admin' && (
+                  <div>
+                    <label className="block text-slate-400 mb-1">Cadista Responsável</label>
+                    <select 
+                      value={formData.cadista}
+                      onChange={(e) => setFormData({...formData, cadista: e.target.value})}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
+                    >
+                      <option value="Não atribuído">Terceirizar...</option>
+                      {cadistasList.map(c => (
+                        <option key={c.id} value={c.nome}>{c.nome}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-slate-400 mb-1">Prazo / Entrega</label>
                   <input 
