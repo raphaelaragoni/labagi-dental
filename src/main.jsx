@@ -53,7 +53,6 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// Tabela Oficial LABAGI 2026 com valores reais
 const TABELA_LABAGI = [
   { nome: "Dissilicato Injetado", preco: 350 },
   { nome: "Dissilicato Fresado CAD/CAM", preco: 400 },
@@ -73,8 +72,8 @@ function App() {
   const [currentUserRole, setCurrentUserRole] = useState('admin');
   const [jobs, setJobs] = useState([]);
   const [cadistasList, setCadistasList] = useState([
-    { id: '1', nome: 'Arthur Cardoso', chavePix: '' },
-    { id: '2', nome: 'Raphael Aragoni', chavePix: '' }
+    { id: '1', nome: 'Arthur Cardoso' },
+    { id: '2', nome: 'Raphael Aragoni' }
   ]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState('Todos');
@@ -84,13 +83,12 @@ function App() {
   const [copiedLink, setCopiedLink] = useState(false);
   const [uploading, setUploading] = useState(false);
 
-  // Formulários
   const [formData, setFormData] = useState({
     dentista: '',
     paciente: '',
     servico: TABELA_LABAGI[0].nome,
     valorServico: TABELA_LABAGI[0].preco,
-    elementosCount: 1, // Usado para calcular os R$ 30 por coroa
+    elementosCount: 1,
     dente: '',
     cadista: 'Não atribuído',
     prazo: '',
@@ -103,7 +101,6 @@ function App() {
     chavePix: ''
   });
 
-  // Buscar OS em tempo real
   useEffect(() => {
     const q = query(collection(db, "ordens_servico"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -116,7 +113,6 @@ function App() {
     return () => unsubscribe();
   }, []);
 
-  // Buscar Cadistas
   useEffect(() => {
     const q = query(collection(db, "cadistas"), orderBy("nome", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -183,7 +179,7 @@ function App() {
       }
 
       const qtdElementos = Number(formData.elementosCount) || 1;
-      const custoCadistaTotal = qtdElementos * 30; // R$ 30 por coroa/elemento para o cadista
+      const custoCadistaTotal = qtdElementos * 30;
 
       await addDoc(collection(db, "ordens_servico"), {
         codigoOS: `OS-2026-${Math.floor(100 + Math.random() * 900)}`,
@@ -192,7 +188,7 @@ function App() {
         servico: formData.servico,
         elementosCount: qtdElementos,
         valorTotal: Number(formData.valorServico) * qtdElementos,
-        custoCadista: custoCadistaTotal, // R$ 30 por elemento
+        custoCadista: custoCadistaTotal,
         dente: formData.dente || 'Geral',
         cadista: formData.cadista,
         status: 'Pendente',
@@ -297,8 +293,16 @@ function App() {
         {/* Banner Topo */}
         <div className="bg-gradient-to-r from-blue-950 to-slate-800 rounded-2xl p-6 border border-slate-700 flex flex-wrap items-center justify-between gap-4 shadow-xl">
           <div>
-            <h2 className="text-2xl font-bold">Painel do Administrador (LABAGI)</h2>
-            <p className="text-slate-400 text-sm mt-1">Gestão de OS, repasses para cadistas (R$ 30/coroa) e tabela oficial integrada.</p>
+            <h2 className="text-2xl font-bold">
+              {currentUserRole === 'admin' && "Painel do Administrador (LABAGI)"}
+              {currentUserRole === 'cadista' && "Painel do Cadista (Área de Projetos)"}
+              {currentUserRole === 'dentista' && "Área do Cliente (Dentista)"}
+            </h2>
+            <p className="text-slate-400 text-sm mt-1">
+              {currentUserRole === 'admin' && "Gestão completa de OS, financeiro e repasses para cadistas."}
+              {currentUserRole === 'cadista' && "Acompanhe seus trabalhos e baixe os escaneamentos 3D."}
+              {currentUserRole === 'dentista' && "Acompanhe o andamento das suas próteses em produção."}
+            </p>
           </div>
 
           <div className="flex items-center gap-3">
@@ -327,40 +331,42 @@ function App() {
           </div>
         </div>
 
-        {/* Métricas Financeiras e Operacionais */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Trabalhos</p>
-              <p className="text-2xl font-bold mt-1">{stats.total}</p>
+        {/* Métricas Financeiras (EXCLUSIVAS PARA O ADMIN) */}
+        {currentUserRole === 'admin' && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Total Trabalhos</p>
+                <p className="text-2xl font-bold mt-1">{stats.total}</p>
+              </div>
+              <FileText className="w-8 h-8 text-blue-400 opacity-80" />
             </div>
-            <FileText className="w-8 h-8 text-blue-400 opacity-80" />
-          </div>
 
-          <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Faturamento Lab</p>
-              <p className="text-2xl font-bold mt-1 text-emerald-400">R$ {stats.faturamentoTotal.toFixed(2)}</p>
+            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Faturamento Lab</p>
+                <p className="text-2xl font-bold mt-1 text-emerald-400">R$ {stats.faturamentoTotal.toFixed(2)}</p>
+              </div>
+              <DollarSign className="w-8 h-8 text-emerald-400 opacity-80" />
             </div>
-            <DollarSign className="w-8 h-8 text-emerald-400 opacity-80" />
-          </div>
 
-          <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Repasse Cadistas (R$30/un)</p>
-              <p className="text-2xl font-bold mt-1 text-amber-400">R$ {stats.custoCadistasTotal.toFixed(2)}</p>
+            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Repasse Cadistas</p>
+                <p className="text-2xl font-bold mt-1 text-amber-400">R$ {stats.custoCadistasTotal.toFixed(2)}</p>
+              </div>
+              <Users className="w-8 h-8 text-amber-400 opacity-80" />
             </div>
-            <Users className="w-8 h-8 text-amber-400 opacity-80" />
-          </div>
 
-          <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
-            <div>
-              <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Concluídos</p>
-              <p className="text-2xl font-bold mt-1 text-sky-400">{stats.concluidos}</p>
+            <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
+              <div>
+                <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Concluídos</p>
+                <p className="text-2xl font-bold mt-1 text-sky-400">{stats.concluidos}</p>
+              </div>
+              <CheckCircle2 className="w-8 h-8 text-sky-400 opacity-80" />
             </div>
-            <CheckCircle2 className="w-8 h-8 text-sky-400 opacity-80" />
           </div>
-        </div>
+        )}
 
         {/* Tabela de OS */}
         <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden shadow-xl">
@@ -391,10 +397,10 @@ function App() {
             <table className="w-full text-left text-xs text-slate-300">
               <thead className="bg-slate-900/60 text-slate-400 uppercase text-[10px] tracking-wider border-b border-slate-700">
                 <tr>
-                  <th className="px-6 py-4">OS / Valores</th>
+                  <th className="px-6 py-4">Código OS</th>
                   <th className="px-6 py-4">Dentista / Paciente</th>
-                  <th className="px-6 py-4">Serviço (Tabela LABAGI)</th>
-                  <th className="px-6 py-4">Cadista (R$ 30/un)</th>
+                  <th className="px-6 py-4">Serviço / Elementos</th>
+                  <th className="px-6 py-4">Cadista Responsável</th>
                   <th className="px-6 py-4">Prazo</th>
                   <th className="px-6 py-4">Status</th>
                   <th className="px-6 py-4 text-right">Arquivo 3D</th>
@@ -410,10 +416,15 @@ function App() {
                 ) : (
                   filteredJobs.map((job) => (
                     <tr key={job.id} className="hover:bg-slate-700/30 transition">
-                      <td className="px-6 py-4">
-                        <p className="font-mono font-bold text-blue-400">{job.codigoOS}</p>
-                        <p className="text-[11px] text-emerald-400 font-medium">Lab: R$ {job.valorTotal || 0}</p>
-                        <p className="text-[10px] text-amber-400">Cadista: R$ {job.custoCadista || 0}</p>
+                      <td className="px-6 py-4 font-mono font-bold text-blue-400">
+                        {job.codigoOS}
+                        {/* VALORES VISÍVEIS APENAS PARA O ADMIN */}
+                        {currentUserRole === 'admin' && (
+                          <div className="mt-1">
+                            <span className="text-[10px] text-emerald-400 block">Lab: R$ {job.valorTotal || 0}</span>
+                            <span className="text-[10px] text-amber-400 block">Cadista: R$ {job.custoCadista || 0}</span>
+                          </div>
+                        )}
                       </td>
                       <td className="px-6 py-4">
                         <p className="font-semibold text-slate-200">{job.dentista}</p>
@@ -424,32 +435,46 @@ function App() {
                         <p className="text-[11px] text-slate-400">{job.elementosCount || 1} un(s) | Dente: {job.dente}</p>
                       </td>
                       <td className="px-6 py-4">
-                        <select
-                          value={job.cadista || 'Não atribuído'}
-                          onChange={(e) => handleAssignCadista(job.id, e.target.value)}
-                          className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none"
-                        >
-                          <option value="Não atribuído">Terceirizar...</option>
-                          {cadistasList.map(c => (
-                            <option key={c.id} value={c.nome}>{c.nome}</option>
-                          ))}
-                        </select>
+                        {currentUserRole === 'admin' ? (
+                          <select
+                            value={job.cadista || 'Não atribuído'}
+                            onChange={(e) => handleAssignCadista(job.id, e.target.value)}
+                            className="bg-slate-900 border border-slate-700 text-slate-200 rounded-lg px-2 py-1 text-xs focus:outline-none"
+                          >
+                            <option value="Não atribuído">Terceirizar...</option>
+                            {cadistasList.map(c => (
+                              <option key={c.id} value={c.nome}>{c.nome}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <span className="text-slate-300 font-medium">{job.cadista || 'Não atribuído'}</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-slate-300">{job.prazo}</td>
                       <td className="px-6 py-4">
-                        <select
-                          value={job.status}
-                          onChange={(e) => handleStatusChange(job.id, e.target.value)}
-                          className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border focus:outline-none ${
+                        {currentUserRole === 'dentista' ? (
+                          <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${
                             job.status === 'Concluído' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' :
                             job.status === 'Em Produção' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
                             'bg-slate-900 text-sky-400 border-slate-700'
-                          }`}
-                        >
-                          <option value="Pendente">Pendente</option>
-                          <option value="Em Produção">Em Produção</option>
-                          <option value="Concluído">Concluído</option>
-                        </select>
+                          }`}>
+                            {job.status}
+                          </span>
+                        ) : (
+                          <select
+                            value={job.status}
+                            onChange={(e) => handleStatusChange(job.id, e.target.value)}
+                            className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border focus:outline-none ${
+                              job.status === 'Concluído' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' :
+                              job.status === 'Em Produção' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
+                              'bg-slate-900 text-sky-400 border-slate-700'
+                            }`}
+                          >
+                            <option value="Pendente">Pendente</option>
+                            <option value="Em Produção">Em Produção</option>
+                            <option value="Concluído">Concluído</option>
+                          </select>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right">
                         {job.arquivoUrl ? (
@@ -482,9 +507,7 @@ function App() {
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
                 <UserCheck className="w-5 h-5 text-emerald-400" /> Cadastrar Cadista Terceirizado
               </h3>
-              <button onClick={() => setShowCadistaModal(false)} className="text-slate-400 hover:text-white">
-                <X className="w-5 h-5" />
-              </button>
+              <button onClick={() => setShowCadistaModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
 
             <form onSubmit={handleCreateCadista} className="space-y-3 text-xs">
@@ -496,7 +519,7 @@ function App() {
                   placeholder="Ex: Lucas Freelancer CAD"
                   value={cadistaData.nome}
                   onChange={(e) => setCadistaData({...cadistaData, nome: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
               <div>
@@ -506,7 +529,7 @@ function App() {
                   placeholder="cadista@email.com"
                   value={cadistaData.email}
                   onChange={(e) => setCadistaData({...cadistaData, email: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
               <div>
@@ -516,7 +539,7 @@ function App() {
                   placeholder="CPF, Telefone ou E-mail"
                   value={cadistaData.chavePix}
                   onChange={(e) => setCadistaData({...cadistaData, chavePix: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                 />
               </div>
               <div className="pt-2 flex justify-end gap-2">
@@ -548,7 +571,7 @@ function App() {
         </div>
       )}
 
-      {/* Modal Nova OS com Tabela LABAGI */}
+      {/* Modal Nova OS */}
       {showNewOSModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
@@ -608,7 +631,7 @@ function App() {
                     onChange={(e) => setFormData({...formData, elementosCount: e.target.value})}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
-                  <p className="text-[10px] text-amber-400 mt-0.5">Cadista receberá: R$ {Number(formData.elementosCount || 1) * 30}</p>
+                  <p className="text-[10px] text-amber-400 mt-0.5">Custo cadista interno: R$ {Number(formData.elementosCount || 1) * 30}</p>
                 </div>
               </div>
 
