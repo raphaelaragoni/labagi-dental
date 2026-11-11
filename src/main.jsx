@@ -11,7 +11,6 @@ import {
 } from "firebase/auth";
 import { 
   getFirestore,
-  collection,
   doc,
   getDoc
 } from "firebase/firestore";
@@ -25,7 +24,6 @@ import {
 } from 'lucide-react';
 
 function App() {
-  // INTERCEÇÃO DA ROTA DE CADASTRO (Prioridade Máxima)
   const urlParams = new URLSearchParams(window.location.search);
   const isCadastrarRoute = window.location.pathname.includes('/cadastrar') || urlParams.has('token') || urlParams.get('token') === 'LABAGI-2026';
 
@@ -34,7 +32,7 @@ function App() {
   }
 
   const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState(null); // 'admin', 'cadista', 'dentista'
+  const [userRole, setUserRole] = useState(null);
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   const [loginEmail, setLoginEmail] = useState('');
@@ -57,7 +55,6 @@ function App() {
   const db = getFirestore(app);
   const storage = getStorage(app);
 
-  // Monitorar autenticação e buscar o papel (role) na coleção padronizada "Usuarios"
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -68,7 +65,7 @@ function App() {
           if (userDoc.exists()) {
             setUserRole(userDoc.data().role || 'dentista');
           } else {
-            setUserRole('dentista'); // Padrão caso não exista registo na coleção
+            setUserRole('dentista');
           }
         } catch (err) {
           console.error("Erro ao buscar papel do utilizador:", err);
@@ -119,7 +116,6 @@ function App() {
     );
   }
 
-  // TELA DE LOGIN COM RECUPERAÇÃO E VISUALIZAR SENHA
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
@@ -221,12 +217,19 @@ function App() {
           </button>
         </header>
 
-        {/* PAINEL DINÂMICO CONSOANTE O PERFIL */}
         <div className="bg-slate-800 border border-slate-700 p-6 rounded-3xl space-y-4">
           {userRole === 'admin' && (
             <div>
               <h2 className="text-lg font-semibold text-white">Painel de Administrador</h2>
               <p className="text-sm text-slate-400">Acesso total de gestão laboratorial, ordens de serviço e utilizadores.</p>
+              <div className="mt-4">
+                <a 
+                  href="/cadastrar" 
+                  className="inline-block bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-xl text-sm font-semibold transition"
+                >
+                  Ir para Tela de Registo de Novos Utilizadores
+                </a>
+              </div>
             </div>
           )}
 
