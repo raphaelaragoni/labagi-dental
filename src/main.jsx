@@ -12,55 +12,17 @@ import {
 import { 
   getFirestore,
   collection,
-  addDoc,
-  onSnapshot,
-  query,
-  orderBy,
   doc,
-  getDoc,
-  updateDoc
+  getDoc
 } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { 
   Shield, 
-  User, 
-  Lock, 
   LogOut, 
-  Plus, 
-  FileText, 
-  CheckCircle2, 
-  Clock, 
-  AlertCircle, 
-  UserPlus, 
-  Link as LinkIcon, 
-  Copy, 
-  X, 
-  FileCheck, 
-  UserCheck, 
-  DollarSign, 
-  BarChart3, 
-  LogIn, 
-  MessageSquare,
   Eye,
   EyeOff,
   KeyRound
 } from 'lucide-react';
-
-const TABELA_LABAGI = [
-  { nome: "Prótese sobre Implante", preco: 350 },
-  { nome: "RMF", preco: 150 },
-  { nome: "Núcleo", preco: 100 },
-  { nome: "Voxel", preco: 250 }
-];
-
-const STATUS_LABORATORIO = [
-  "Pendente / Aguardando",
-  "Em Modelagem CAD",
-  "Na Impressora / Fresadora",
-  "Em Acabamento / Cerâmica",
-  "Pronto para Entrega",
-  "Concluído"
-];
 
 function App() {
   // INTERCEÇÃO DA ROTA DE CADASTRO (Prioridade Máxima)
@@ -81,28 +43,6 @@ function App() {
   const [loginError, setLoginError] = useState('');
   const [resetSent, setResetSent] = useState(false);
 
-  const [activeTab, setActiveTab] = useState('os');
-  const [jobs, setJobs] = useState([]);
-  const [cadistasList, setCadistasList] = useState([
-    { id: '1', nome: 'Arthur Cardoso' },
-    { id: '2', nome: 'Raphael Aragoni' }
-  ]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState('Todos');
-  const [showInviteModal, setShowInviteModal] = useState(false);
-  const [showCadistaModal, setShowCadistaModal] = useState(false);
-  const [showNewOSModal, setShowNewOSModal] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [uploading, setUploading] = useState(false);
-
-  const [formData, setFormData] = useState({
-    dentista: '',
-    paciente: '',
-    servico: TABELA_LABAGI[0].nome,
-    valorServico: TABELA_LABAGI[0].preco,
-    observacoes: ''
-  });
-
   const firebaseConfig = {
     apiKey: "AizaSyAFit7yJbO2qdnbLdn16oDOGcj8di-9yoM",
     authDomain: "labagi.firebaseapp.com",
@@ -117,7 +57,7 @@ function App() {
   const db = getFirestore(app);
   const storage = getStorage(app);
 
-  // Monitorar autenticação e buscar o papel (role) no Firestore
+  // Monitorar autenticação e buscar o papel (role) na coleção padronizada "Usuarios"
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
@@ -128,7 +68,7 @@ function App() {
           if (userDoc.exists()) {
             setUserRole(userDoc.data().role || 'dentista');
           } else {
-            setUserRole('dentista'); // Padrão caso não exista documento
+            setUserRole('dentista'); // Padrão caso não exista registo na coleção
           }
         } catch (err) {
           console.error("Erro ao buscar papel do utilizador:", err);
@@ -179,7 +119,7 @@ function App() {
     );
   }
 
-  // TELA DE LOGIN COM SUPORTE A VER SENHA E RECUPERAÇÃO
+  // TELA DE LOGIN COM RECUPERAÇÃO E VISUALIZAR SENHA
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
@@ -281,7 +221,7 @@ function App() {
           </button>
         </header>
 
-        {/* PAINEL DINÂMICO CONSOANTE O TIPO DE UTILIZADOR */}
+        {/* PAINEL DINÂMICO CONSOANTE O PERFIL */}
         <div className="bg-slate-800 border border-slate-700 p-6 rounded-3xl space-y-4">
           {userRole === 'admin' && (
             <div>
