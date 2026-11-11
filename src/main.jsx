@@ -50,14 +50,13 @@ import {
 } from 'lucide-react';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAfit7yJb02QdnBLdLn16oD0Gcj8di-9yoM",
+  apiKey: "AIzaSyAFit7yJbO2QdnbLdnl6oDOGcj8di-9yoM",
   authDomain: "labagi.firebaseapp.com",
   projectId: "labagi",
   storageBucket: "labagi.firebasestorage.app",
   messagingSenderId: "346001346837",
   appId: "1:346001346837:web:258713bf5086115296591c"
 };
-
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
