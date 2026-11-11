@@ -94,6 +94,12 @@ const STATUS_LABORATORIO = [
 ];
 
 function App() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const isCadastrarRoute = window.location.pathname.includes('/cadastrar') || urlParams.has('token');
+
+  if (isCadastrarRoute) {
+    return <Cadastrar />;
+  }
   const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null); 
   const [loadingAuth, setLoadingAuth] = useState(true);
