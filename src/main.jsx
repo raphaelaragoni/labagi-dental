@@ -6,7 +6,8 @@ import {
   getAuth,
   signInWithEmailAndPassword,
   signOut,
-  onAuthStateChanged
+  onAuthStateChanged,
+  sendPasswordResetEmail
 } from "firebase/auth";
 import { 
   getFirestore,
@@ -39,7 +40,10 @@ import {
   DollarSign, 
   BarChart3, 
   LogIn, 
-  MessageSquare 
+  MessageSquare,
+  Eye,
+  EyeOff,
+  KeyRound
 } from 'lucide-react';
 
 const TABELA_LABAGI = [
@@ -68,12 +72,14 @@ function App() {
   }
 
   const [user, setUser] = useState(null);
-  const [userRole, setUserRole] = useState(null);
+  const [userRole, setUserRole] = useState(null); // 'admin', 'cadista', 'dentista'
   const [loadingAuth, setLoadingAuth] = useState(true);
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loginError, setLoginError] = useState('');
+  const [resetSent, setResetSent] = useState(false);
 
   const [activeTab, setActiveTab] = useState('os');
   const [jobs, setJobs] = useState([]);
@@ -111,21 +117,53 @@ function App() {
   const db = getFirestore(app);
   const storage = getStorage(app);
 
+  // Monitorar autenticação e buscar o papel (role) no Firestore
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
+      if (currentUser) {
+        try {
+          const userDocRef = doc(db, "Usuarios", currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            setUserRole(userDoc.data().role || 'dentista');
+          } else {
+            setUserRole('dentista'); // Padrão caso não exista documento
+          }
+        } catch (err) {
+          console.error("Erro ao buscar papel do utilizador:", err);
+          setUserRole('dentista');
+        }
+      } else {
+        setUserRole(null);
+      }
       setLoadingAuth(false);
     });
     return () => unsubscribe();
-  }, [auth]);
+  }, [auth, db]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoginError('');
+    setResetSent(false);
     try {
       await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
     } catch (err) {
       setLoginError('Erro ao entrar. Verifique o e-mail e a senha.');
+    }
+  };
+
+  const handlePasswordReset = async () => {
+    if (!loginEmail) {
+      setLoginError('Introduza o seu e-mail para recuperar a senha.');
+      return;
+    }
+    try {
+      await sendPasswordResetEmail(auth, loginEmail);
+      setResetSent(true);
+      setLoginError('');
+    } catch (err) {
+      setLoginError('Erro ao enviar e-mail de recuperação. Verifique o endereço.');
     }
   };
 
@@ -141,6 +179,7 @@ function App() {
     );
   }
 
+  // TELA DE LOGIN COM SUPORTE A VER SENHA E RECUPERAÇÃO
   if (!user) {
     return (
       <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
@@ -159,6 +198,12 @@ function App() {
             </div>
           )}
 
+          {resetSent && (
+            <div className="bg-emerald-950/60 border border-emerald-800 text-emerald-300 p-3 rounded-xl text-xs">
+              E-mail de recuperação enviado com sucesso! Verifique a sua caixa de entrada.
+            </div>
+          )}
+
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
               <label className="block text-xs text-slate-400 mb-1">E-mail</label>
@@ -173,15 +218,36 @@ function App() {
             </div>
             <div>
               <label className="block text-xs text-slate-400 mb-1">Senha</label>
-              <input 
-                type="password" 
-                required 
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                placeholder="••••••••" 
-                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-blue-500" 
-              />
+              <div className="relative">
+                <input 
+                  type={showPassword ? "text" : "password"} 
+                  required 
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  placeholder="••••••••" 
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-blue-500 pr-10" 
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                >
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
             </div>
+
+            <div className="flex justify-between items-center text-xs">
+              <button 
+                type="button"
+                onClick={handlePasswordReset}
+                className="text-blue-400 hover:underline flex items-center space-x-1"
+              >
+                <KeyRound className="w-3 h-3" />
+                <span>Esqueci a minha senha</span>
+              </button>
+            </div>
+
             <button type="submit" className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-blue-500/20">
               Entrar no Sistema
             </button>
@@ -201,7 +267,9 @@ function App() {
             </div>
             <div>
               <h1 className="text-xl font-bold tracking-wide">LABAGI - Gestão</h1>
-              <p className="text-xs text-slate-400">Sessão iniciada como: {user.email}</p>
+              <p className="text-xs text-slate-400">
+                Sessão: {user.email} | Perfil: <span className="uppercase font-semibold text-blue-400">{userRole}</span>
+              </p>
             </div>
           </div>
           <button 
@@ -213,9 +281,28 @@ function App() {
           </button>
         </header>
 
-        <div className="bg-slate-800 border border-slate-700 p-6 rounded-3xl text-center space-y-4">
-          <h2 className="text-lg font-semibold">Bem-vindo ao Painel LABAGI</h2>
-          <p className="text-sm text-slate-400">O sistema está operacional e pronto para gerir as ordens de serviço e parceiros.</p>
+        {/* PAINEL DINÂMICO CONSOANTE O TIPO DE UTILIZADOR */}
+        <div className="bg-slate-800 border border-slate-700 p-6 rounded-3xl space-y-4">
+          {userRole === 'admin' && (
+            <div>
+              <h2 className="text-lg font-semibold text-white">Painel de Administrador</h2>
+              <p className="text-sm text-slate-400">Acesso total de gestão laboratorial, ordens de serviço e utilizadores.</p>
+            </div>
+          )}
+
+          {userRole === 'cadista' && (
+            <div>
+              <h2 className="text-lg font-semibold text-white">Painel de Cadista</h2>
+              <p className="text-sm text-slate-400">Acesso dedicado ao fluxo de modelagem CAD e ordens atribuídas.</p>
+            </div>
+          )}
+
+          {userRole === 'dentista' && (
+            <div>
+              <h2 className="text-lg font-semibold text-white">Painel do Dentista Parceiro</h2>
+              <p className="text-sm text-slate-400">Acompanhe o estado das suas próteses e pedidos em andamento.</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
