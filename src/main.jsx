@@ -1,7 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import { initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { 
+  getAuth, 
+  signInWithEmailAndPassword, 
+  signOut, 
+  onAuthStateChanged 
+} from "firebase/auth";
 import { 
   getFirestore, 
   collection, 
@@ -10,6 +15,7 @@ import {
   query, 
   orderBy, 
   doc, 
+  getDoc, 
   updateDoc 
 } from "firebase/firestore";
 import { 
@@ -37,7 +43,10 @@ import {
   FileCheck,
   UserCheck,
   DollarSign,
-  BarChart3
+  BarChart3,
+  LogIn,
+  LogOut,
+  MessageSquare
 } from 'lucide-react';
 
 const firebaseConfig = {
@@ -69,8 +78,25 @@ const TABELA_LABAGI = [
   { nome: "PMMA", preco: 250 }
 ];
 
+// Lista de status detalhados para o laboratório
+const STATUS_LABORATORIO = [
+  "Pendente / Aguardando",
+  "Em Modelagem CAD",
+  "Na Impressora / Fresadora",
+  "Em Acabamento / Cerâmica",
+  "Pronto para Entrega",
+  "Concluído"
+];
+
 function App() {
-  const [currentUserRole, setCurrentUserRole] = useState('admin');
+  const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null); 
+  const [loadingAuth, setLoadingAuth] = useState(true);
+
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  const [loginError, setLoginError] = useState('');
+
   const [activeTab, setActiveTab] = useState('os');
   const [jobs, setJobs] = useState([]);
   const [cadistasList, setCadistasList] = useState([
@@ -94,6 +120,7 @@ function App() {
     dente: '',
     cadista: 'Não atribuído',
     prazo: '',
+    observacoes: '',
     arquivo: null
   });
 
@@ -104,6 +131,36 @@ function App() {
   });
 
   useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        setUser(currentUser);
+        try {
+          const userDocRef = doc(db, "usuarios", currentUser.uid);
+          const userSnap = await getDoc(userDocRef);
+          if (userSnap.exists()) {
+            setUserRole(userSnap.data().role || 'dentista');
+          } else {
+            if (currentUser.email === 'raphaelaragonixd@gmail.com') {
+              setUserRole('admin');
+            } else {
+              setUserRole('dentista');
+            }
+          }
+        } catch (err) {
+          console.error("Erro ao buscar perfil:", err);
+          setUserRole('dentista');
+        }
+      } else {
+        setUser(null);
+        setUserRole(null);
+      }
+      setLoadingAuth(false);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
     const q = query(collection(db, "ordens_servico"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const docs = snapshot.docs.map(docSnap => ({
@@ -113,9 +170,10 @@ function App() {
       setJobs(docs);
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
 
   useEffect(() => {
+    if (!user) return;
     const q = query(collection(db, "cadistas"), orderBy("nome", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
       if (!snapshot.empty) {
@@ -127,7 +185,22 @@ function App() {
       }
     });
     return () => unsubscribe();
-  }, []);
+  }, [user]);
+
+  const handleLogin = async (e) => {
+    e.preventDefault();
+    setLoginError('');
+    try {
+      await signInWithEmailAndPassword(auth, loginEmail, loginPassword);
+    } catch (err) {
+      console.error("Erro no login:", err);
+      setLoginError('E-mail ou senha incorretos. Verifique suas credenciais.');
+    }
+  };
+
+  const handleLogout = async () => {
+    await signOut(auth);
+  };
 
   const handleServicoChange = (e) => {
     const nomeServico = e.target.value;
@@ -182,11 +255,7 @@ function App() {
 
       const qtdElementos = Number(formData.elementosCount) || 1;
       const custoCadistaTotal = qtdElementos * 30;
-
-      // Se for dentista criando, assume o nome dele ou o preenchido no form
-      const nomeDentista = currentUserRole === 'dentista' 
-        ? (formData.dentista || 'Dr. Cliente') 
-        : (formData.dentista || 'Dr. Roberto Silva');
+      const nomeDentista = userRole === 'dentista' ? (user.email || 'Dr. Cliente') : (formData.dentista || 'Dr. Roberto Silva');
 
       await addDoc(collection(db, "ordens_servico"), {
         codigoOS: `OS-2026-${Math.floor(100 + Math.random() * 900)}`,
@@ -197,9 +266,10 @@ function App() {
         valorTotal: Number(formData.valorServico) * qtdElementos,
         custoCadista: custoCadistaTotal,
         dente: formData.dente || 'Geral',
-        cadista: currentUserRole === 'dentista' ? 'Não atribuído' : formData.cadista,
-        status: 'Pendente',
+        cadista: userRole === 'dentista' ? 'Não atribuído' : formData.cadista,
+        status: 'Pendente / Aguardando',
         prazo: formData.prazo || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        observacoes: formData.observacoes || '',
         arquivoNome: fileName,
         arquivoUrl: fileUrl,
         createdAt: new Date().toISOString()
@@ -214,6 +284,7 @@ function App() {
         dente: '',
         cadista: 'Não atribuído',
         prazo: '',
+        observacoes: '',
         arquivo: null
       });
       setShowNewOSModal(false);
@@ -271,12 +342,80 @@ function App() {
     total: jobs.length,
     faturamentoTotal: jobs.reduce((acc, j) => acc + (Number(j.valorTotal) || 0), 0),
     custoCadistasTotal: jobs.reduce((acc, j) => acc + (Number(j.custoCadista) || 0), 0),
-    concluidos: jobs.filter(j => j.status === 'Concluído').length
+    concluidos: jobs.filter(j => j.status === 'Concluído' || j.status === 'Pronto para Entrega').length
   };
+
+  if (loadingAuth) {
+    return (
+      <div className="min-h-screen bg-slate-900 flex items-center justify-center text-slate-300">
+        <p className="text-sm font-medium animate-pulse">Carregando sistema LABAGI...</p>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex items-center justify-center p-4">
+        <div className="bg-slate-800 border border-slate-700 rounded-3xl max-w-md w-full p-8 space-y-6 shadow-2xl">
+          <div className="text-center space-y-2">
+            <div className="bg-blue-600 p-3 rounded-2xl text-white w-fit mx-auto shadow-lg shadow-blue-500/30">
+              <Shield className="w-8 h-8" />
+            </div>
+            <h1 className="text-2xl font-bold tracking-wide text-white">LABAGI</h1>
+            <p className="text-xs text-slate-400">Sistema Integrado de Prótese & CAD</p>
+          </div>
+
+          {loginError && (
+            <div className="bg-rose-950/60 border border-rose-800 text-rose-300 p-3 rounded-xl text-xs text-center">
+              {loginError}
+            </div>
+          )}
+
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">E-mail de Acesso</label>
+              <input 
+                type="email" 
+                required
+                placeholder="seu.email@exemplo.com"
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs text-slate-400 mb-1">Senha</label>
+              <input 
+                type="password" 
+                required
+                placeholder="••••••••"
+                value={loginPassword}
+                onChange={(e) => setLoginPassword(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-sm text-slate-200 focus:outline-none focus:border-blue-500"
+              />
+            </div>
+
+            <button 
+              type="submit" 
+              className="w-full bg-blue-600 hover:bg-blue-500 text-white font-semibold py-3 rounded-xl text-sm transition shadow-lg shadow-blue-500/20 flex items-center justify-center gap-2"
+            >
+              <LogIn className="w-4 h-4" /> Entrar no Sistema
+            </button>
+          </form>
+
+          <div className="text-center pt-2">
+            <p className="text-[11px] text-slate-500">
+              Acesso restrito a administradores, cadistas e dentistas parceiros do LABAGI.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100 font-sans">
-      {/* Header */}
       <header className="bg-slate-800 border-b border-slate-700 px-6 py-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center space-x-3">
           <div className="bg-blue-600 p-2 rounded-xl text-white shadow-lg shadow-blue-500/30">
@@ -288,48 +427,39 @@ function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 bg-slate-900/80 p-1.5 rounded-xl border border-slate-700">
-          <span className="text-xs text-slate-400 px-2 font-medium">Perfil:</span>
+        <div className="flex items-center gap-4">
+          <div className="text-right hidden sm:block">
+            <p className="text-xs font-semibold text-slate-200">{user.email}</p>
+            <p className="text-[10px] text-blue-400 uppercase tracking-wider font-bold">
+              Perfil: {userRole}
+            </p>
+          </div>
           <button 
-            onClick={() => { setCurrentUserRole('admin'); setActiveTab('os'); }} 
-            className={`px-3 py-1.5 text-xs rounded-lg transition-all ${currentUserRole === 'admin' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'}`}
+            onClick={handleLogout}
+            className="bg-slate-700 hover:bg-rose-900/60 text-slate-300 hover:text-rose-300 px-3.5 py-2 rounded-xl text-xs font-medium transition flex items-center gap-1.5 border border-slate-600"
           >
-            Admin Lab
-          </button>
-          <button 
-            onClick={() => { setCurrentUserRole('cadista'); setActiveTab('os'); }} 
-            className={`px-3 py-1.5 text-xs rounded-lg transition-all ${currentUserRole === 'cadista' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'}`}
-          >
-            Cadista
-          </button>
-          <button 
-            onClick={() => { setCurrentUserRole('dentista'); setActiveTab('os'); }} 
-            className={`px-3 py-1.5 text-xs rounded-lg transition-all ${currentUserRole === 'dentista' ? 'bg-blue-600 text-white font-semibold' : 'text-slate-400 hover:text-white'}`}
-          >
-            Dentista
+            <LogOut className="w-3.5 h-3.5" /> Sair
           </button>
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto p-6 space-y-6">
-        {/* Banner Topo */}
         <div className="bg-gradient-to-r from-blue-950 to-slate-800 rounded-2xl p-6 border border-slate-700 flex flex-wrap items-center justify-between gap-4 shadow-xl">
           <div>
             <h2 className="text-2xl font-bold">
-              {currentUserRole === 'admin' && "Painel do Administrador (LABAGI)"}
-              {currentUserRole === 'cadista' && "Painel do Cadista (Área de Projetos)"}
-              {currentUserRole === 'dentista' && "Área do Cliente (Dentista)"}
+              {userRole === 'admin' && "Painel do Administrador (LABAGI)"}
+              {userRole === 'cadista' && "Painel do Cadista (Área de Projetos)"}
+              {userRole === 'dentista' && "Área do Cliente (Dentista)"}
             </h2>
             <p className="text-slate-400 text-sm mt-1">
-              {currentUserRole === 'admin' && "Gestão operacional, tabela de preços e contabilidade segregada."}
-              {currentUserRole === 'cadista' && "Visualize os trabalhos atribuídos e baixe os arquivos 3D."}
-              {currentUserRole === 'dentista' && "Envie novas Ordens de Serviço e acompanhe o andamento dos seus trabalhos."}
+              {userRole === 'admin' && "Gestão operacional, tabela de preços e contabilidade segregada."}
+              {userRole === 'cadista' && "Visualize os trabalhos atribuídos e baixe os arquivos 3D."}
+              {userRole === 'dentista' && "Envie novas Ordens de Serviço e acompanhe o andamento dos seus trabalhos."}
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            {currentUserRole === 'admin' && (
+            {userRole === 'admin' && (
               <>
                 <button 
                   onClick={() => setActiveTab(activeTab === 'os' ? 'contabilidade' : 'os')}
@@ -352,8 +482,7 @@ function App() {
               </>
             )}
 
-            {/* BOTÃO NOVA OS VISÍVEL PARA ADMIN E DENTISTA */}
-            {(currentUserRole === 'admin' || currentUserRole === 'dentista') && (
+            {(userRole === 'admin' || userRole === 'dentista') && (
               <button 
                 onClick={() => setShowNewOSModal(true)}
                 className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2.5 rounded-xl flex items-center gap-2 text-xs font-semibold shadow-lg shadow-blue-500/20 transition"
@@ -364,8 +493,7 @@ function App() {
           </div>
         </div>
 
-        {/* CONTEÚDO: CONTABILIDADE (ADMIN) */}
-        {currentUserRole === 'admin' && activeTab === 'contabilidade' ? (
+        {userRole === 'admin' && activeTab === 'contabilidade' ? (
           <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 space-y-4 shadow-xl">
@@ -417,7 +545,7 @@ function App() {
           </div>
         ) : (
           <>
-            {currentUserRole === 'admin' && (
+            {userRole === 'admin' && (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
                   <div>
@@ -445,7 +573,7 @@ function App() {
 
                 <div className="bg-slate-800 p-5 rounded-2xl border border-slate-700 flex items-center justify-between">
                   <div>
-                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Concluídos</p>
+                    <p className="text-slate-400 text-xs font-medium uppercase tracking-wider">Finalizados</p>
                     <p className="text-2xl font-bold mt-1 text-sky-400">{stats.concluidos}</p>
                   </div>
                   <CheckCircle2 className="w-8 h-8 text-sky-400 opacity-80" />
@@ -471,9 +599,9 @@ function App() {
                   className="bg-slate-900 border border-slate-700 text-xs rounded-xl px-3 py-2 text-slate-200 focus:outline-none"
                 >
                   <option value="Todos">Todos os Status</option>
-                  <option value="Pendente">Pendente</option>
-                  <option value="Em Produção">Em Produção</option>
-                  <option value="Concluído">Concluído</option>
+                  {STATUS_LABORATORIO.map((st, i) => (
+                    <option key={i} value={st}>{st}</option>
+                  ))}
                 </select>
               </div>
 
@@ -484,9 +612,9 @@ function App() {
                       <th className="px-6 py-4">Código OS</th>
                       <th className="px-6 py-4">Dentista / Paciente</th>
                       <th className="px-6 py-4">Serviço / Elementos</th>
+                      <th className="px-6 py-4">Obs. / Comentário</th>
                       <th className="px-6 py-4">Cadista Responsável</th>
-                      <th className="px-6 py-4">Prazo</th>
-                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4">Status / Etapa Atual</th>
                       <th className="px-6 py-4 text-right">Arquivo 3D</th>
                     </tr>
                   </thead>
@@ -502,7 +630,7 @@ function App() {
                         <tr key={job.id} className="hover:bg-slate-700/30 transition">
                           <td className="px-6 py-4 font-mono font-bold text-blue-400">
                             {job.codigoOS}
-                            {currentUserRole === 'admin' && (
+                            {userRole === 'admin' && (
                               <div className="mt-1">
                                 <span className="text-[10px] text-emerald-400 block">Lab: R$ {job.valorTotal || 0}</span>
                                 <span className="text-[10px] text-amber-400 block">Cadista: R$ {job.custoCadista || 0}</span>
@@ -517,8 +645,18 @@ function App() {
                             <p className="text-slate-200 font-medium">{job.servico}</p>
                             <p className="text-[11px] text-slate-400">{job.elementosCount || 1} un(s) | Dente: {job.dente}</p>
                           </td>
+                          <td className="px-6 py-4 max-w-[200px]">
+                            {job.observacoes ? (
+                              <div className="flex items-start gap-1.5 text-slate-300 bg-slate-900/40 p-2 rounded-lg border border-slate-700/50">
+                                <MessageSquare className="w-3.5 h-3.5 text-blue-400 shrink-0 mt-0.5" />
+                                <span className="text-[11px] truncate" title={job.observacoes}>{job.observacoes}</span>
+                              </div>
+                            ) : (
+                              <span className="text-slate-500 text-[11px] italic">Sem observações</span>
+                            )}
+                          </td>
                           <td className="px-6 py-4">
-                            {currentUserRole === 'admin' ? (
+                            {userRole === 'admin' ? (
                               <select
                                 value={job.cadista || 'Não atribuído'}
                                 onChange={(e) => handleAssignCadista(job.id, e.target.value)}
@@ -533,29 +671,20 @@ function App() {
                               <span className="text-slate-300 font-medium">{job.cadista || 'Não atribuído'}</span>
                             )}
                           </td>
-                          <td className="px-6 py-4 text-slate-300">{job.prazo}</td>
                           <td className="px-6 py-4">
-                            {currentUserRole === 'dentista' ? (
-                              <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-lg border ${
-                                job.status === 'Concluído' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' :
-                                job.status === 'Em Produção' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
-                                'bg-slate-900 text-sky-400 border-slate-700'
-                              }`}>
+                            {userRole === 'dentista' ? (
+                              <span className="text-[11px] font-semibold px-2.5 py-1 rounded-lg border bg-slate-900 text-sky-400 border-slate-700">
                                 {job.status}
                               </span>
                             ) : (
                               <select
                                 value={job.status}
                                 onChange={(e) => handleStatusChange(job.id, e.target.value)}
-                                className={`text-[11px] font-semibold rounded-lg px-2.5 py-1 border focus:outline-none ${
-                                  job.status === 'Concluído' ? 'bg-emerald-950/60 text-emerald-400 border-emerald-800' :
-                                  job.status === 'Em Produção' ? 'bg-amber-950/60 text-amber-400 border-amber-800' :
-                                  'bg-slate-900 text-sky-400 border-slate-700'
-                                }`}
+                                className="text-[11px] font-semibold rounded-lg px-2.5 py-1 border bg-slate-900 text-amber-400 border-slate-700 focus:outline-none"
                               >
-                                <option value="Pendente">Pendente</option>
-                                <option value="Em Produção">Em Produção</option>
-                                <option value="Concluído">Concluído</option>
+                                {STATUS_LABORATORIO.map((st, i) => (
+                                  <option key={i} value={st}>{st}</option>
+                                ))}
                               </select>
                             )}
                           </td>
@@ -584,7 +713,6 @@ function App() {
         )}
       </main>
 
-      {/* Modais */}
       {showCadistaModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
@@ -713,7 +841,7 @@ function App() {
                     onChange={(e) => setFormData({...formData, elementosCount: e.target.value})}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
-                  {currentUserRole === 'admin' && (
+                  {userRole === 'admin' && (
                     <p className="text-[10px] text-amber-400 mt-0.5">Custo cadista: R$ {Number(formData.elementosCount || 1) * 30}</p>
                   )}
                 </div>
@@ -730,7 +858,7 @@ function App() {
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
                 </div>
-                {currentUserRole === 'admin' && (
+                {userRole === 'admin' && (
                   <div>
                     <label className="block text-slate-400 mb-1">Cadista Responsável</label>
                     <select 
@@ -754,6 +882,18 @@ function App() {
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
                 </div>
+              </div>
+
+              {/* CAMPO DE COMENTÁRIOS / OBSERVAÇÕES DO DENTISTA */}
+              <div>
+                <label className="block text-slate-400 mb-1">Observações / Comentários Clínicos (Cor, Escala, Instruções)</label>
+                <textarea 
+                  rows="2"
+                  placeholder="Ex: Cor A2, cotoquinho gengival mais curto, contato oclusal leve..."
+                  value={formData.observacoes}
+                  onChange={(e) => setFormData({...formData, observacoes: e.target.value})}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
+                ></textarea>
               </div>
 
               <div>
