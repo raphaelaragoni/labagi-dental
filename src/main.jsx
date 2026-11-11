@@ -101,6 +101,8 @@ function App() {
     return <Cadastrar />;
   }
   const [user, setUser] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [user, setUser] = useState(null);
   const [userRole, setUserRole] = useState(null); 
   const [loadingAuth, setLoadingAuth] = useState(true);
 
