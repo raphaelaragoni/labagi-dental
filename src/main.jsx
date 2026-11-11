@@ -50,9 +50,9 @@ import {
 } from 'lucide-react';
 
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  apiKey: "AIzaSyAfit7yJb02QdnBLdLn16oD0Gcj8di-9yoM",
+  authDomain: "labagi.firebaseapp.com",
+  projectId: "labagi",
   storageBucket: "labagi.firebasestorage.app",
   messagingSenderId: "346001346837",
   appId: "1:346001346837:web:258713bf5086115296591c"
