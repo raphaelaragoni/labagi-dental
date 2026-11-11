@@ -50,9 +50,9 @@ import {
 } from 'lucide-react';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyAFit7yJb02Qdnbl.dml6oD0Gcjr8di-9yoM",
-  authDomain: "labagi.firebaseapp.com",
-  projectId: "labagi",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
   storageBucket: "labagi.firebasestorage.app",
   messagingSenderId: "346001346837",
   appId: "1:346001346837:web:258713bf5086115296591c"
@@ -78,7 +78,6 @@ const TABELA_LABAGI = [
   { nome: "PMMA", preco: 250 }
 ];
 
-// Lista de status detalhados para o laboratório
 const STATUS_LABORATORIO = [
   "Pendente / Aguardando",
   "Em Modelagem CAD",
@@ -745,10 +744,10 @@ function App() {
                 />
               </div>
               <div>
-                <label className="block text-slate-400 mb-1">Chave PIX (Para acerto de R$ 30/coroa)</label>
+                <label className="block text-slate-400 mb-1">Chave PIX</label>
                 <input 
                   type="text" 
-                  placeholder="CPF, Telefone ou E-mail"
+                  placeholder="CPF, E-mail ou Telefone"
                   value={cadistaData.chavePix}
                   onChange={(e) => setCadistaData({...cadistaData, chavePix: e.target.value})}
                   className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
@@ -756,7 +755,7 @@ function App() {
               </div>
               <div className="pt-2 flex justify-end gap-2">
                 <button type="button" onClick={() => setShowCadistaModal(false)} className="bg-slate-700 text-slate-300 px-4 py-2 rounded-xl">Cancelar</button>
-                <button type="submit" className="bg-emerald-600 text-white px-5 py-2 rounded-xl font-semibold">Salvar Cadista</button>
+                <button type="submit" className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold px-4 py-2 rounded-xl">Salvar Cadista</button>
               </div>
             </form>
           </div>
@@ -768,14 +767,26 @@ function App() {
           <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <LinkIcon className="w-5 h-5 text-blue-400" /> Enviar Convite ao Dentista
+                <UserPlus className="w-5 h-5 text-blue-400" /> Convidar Dentista Parceiro
               </h3>
               <button onClick={() => setShowInviteModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-            <div className="bg-slate-900 border border-slate-700 p-3 rounded-xl flex items-center justify-between gap-2">
-              <span className="text-xs font-mono text-slate-300 truncate">https://labagi-dental.vercel.app/cadastrar?token=LABAGI-2026</span>
-              <button onClick={copyInviteLink} className="bg-blue-600 text-white text-xs px-3 py-1.5 rounded-lg">
-                {copiedLink ? "Copiado!" : "Copiar"}
+            <p className="text-xs text-slate-400">
+              Envie o link abaixo para o dentista parceiro. Ele poderá se cadastrar e enviar ordens de serviço diretamente para o seu laboratório.
+            </p>
+            <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 p-2 rounded-xl">
+              <input 
+                type="text" 
+                readOnly 
+                value="https://labagi-dental.vercel.app/cadastrar?token=LABAGI-2026"
+                className="bg-transparent text-xs text-slate-300 w-full px-2 focus:outline-none"
+              />
+              <button 
+                onClick={copyInviteLink}
+                className="bg-blue-600 hover:bg-blue-500 text-white px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1 shrink-0"
+              >
+                {copiedLink ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                {copiedLink ? 'Copiado!' : 'Copiar'}
               </button>
             </div>
           </div>
@@ -784,18 +795,17 @@ function App() {
 
       {showNewOSModal && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 space-y-4 shadow-2xl max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                <FileCheck className="w-5 h-5 text-blue-400" /> Nova Ordem de Serviço (Tabela LABAGI)
+                <Plus className="w-5 h-5 text-blue-400" /> Nova Ordem de Serviço
               </h3>
               <button onClick={() => setShowNewOSModal(false)} className="text-slate-400 hover:text-white"><X className="w-5 h-5" /></button>
             </div>
-
-            <form onSubmit={handleCreateOS} className="space-y-4 text-xs">
-              <div className="grid grid-cols-2 gap-3">
+            <form onSubmit={handleCreateOS} className="space-y-3 text-xs">
+              {userRole === 'admin' && (
                 <div>
-                  <label className="block text-slate-400 mb-1">Cirurgião Dentista</label>
+                  <label className="block text-slate-400 mb-1">Nome do Dentista Solicitante</label>
                   <input 
                     type="text" 
                     placeholder="Ex: Dr. Roberto Silva"
@@ -804,36 +814,33 @@ function App() {
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
                 </div>
-                <div>
-                  <label className="block text-slate-400 mb-1">Nome do Paciente *</label>
-                  <input 
-                    type="text" 
-                    required
-                    placeholder="Ex: Ana Maria Souza"
-                    value={formData.paciente}
-                    onChange={(e) => setFormData({...formData, paciente: e.target.value})}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                  />
-                </div>
+              )}
+              <div>
+                <label className="block text-slate-400 mb-1">Nome do Paciente *</label>
+                <input 
+                  type="text" 
+                  required
+                  placeholder="Nome completo do paciente"
+                  value={formData.paciente}
+                  onChange={(e) => setFormData({...formData, paciente: e.target.value})}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
+                />
               </div>
-
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">Serviço da Tabela LABAGI *</label>
+                  <label className="block text-slate-400 mb-1">Serviço Pretendido *</label>
                   <select 
                     value={formData.servico}
                     onChange={handleServicoChange}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   >
-                    {TABELA_LABAGI.map((item, idx) => (
-                      <option key={idx} value={item.nome}>
-                        {item.nome} (R$ {item.preco})
-                      </option>
+                    {TABELA_LABAGI.map((s, i) => (
+                      <option key={i} value={s.nome}>{s.nome} (R$ {s.preco})</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-slate-400 mb-1">Qtd de Coroas / Elementos</label>
+                  <label className="block text-slate-400 mb-1">Nº de Elementos</label>
                   <input 
                     type="number" 
                     min="1"
@@ -841,40 +848,21 @@ function App() {
                     onChange={(e) => setFormData({...formData, elementosCount: e.target.value})}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
-                  {userRole === 'admin' && (
-                    <p className="text-[10px] text-amber-400 mt-0.5">Custo cadista: R$ {Number(formData.elementosCount || 1) * 30}</p>
-                  )}
                 </div>
               </div>
-
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-slate-400 mb-1">Elemento / Dente</label>
+                  <label className="block text-slate-400 mb-1">Dente(s) / Região</label>
                   <input 
                     type="text" 
-                    placeholder="Ex: 11, 21"
+                    placeholder="Ex: 11, 21 ou Superior"
                     value={formData.dente}
                     onChange={(e) => setFormData({...formData, dente: e.target.value})}
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                   />
                 </div>
-                {userRole === 'admin' && (
-                  <div>
-                    <label className="block text-slate-400 mb-1">Cadista Responsável</label>
-                    <select 
-                      value={formData.cadista}
-                      onChange={(e) => setFormData({...formData, cadista: e.target.value})}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
-                    >
-                      <option value="Não atribuído">Terceirizar...</option>
-                      {cadistasList.map(c => (
-                        <option key={c.id} value={c.nome}>{c.nome}</option>
-                      ))}
-                    </select>
-                  </div>
-                )}
                 <div>
-                  <label className="block text-slate-400 mb-1">Prazo / Entrega</label>
+                  <label className="block text-slate-400 mb-1">Prazo Desejado</label>
                   <input 
                     type="date" 
                     value={formData.prazo}
@@ -884,37 +872,50 @@ function App() {
                 </div>
               </div>
 
-              {/* CAMPO DE COMENTÁRIOS / OBSERVAÇÕES DO DENTISTA */}
+              {userRole === 'admin' && (
+                <div>
+                  <label className="block text-slate-400 mb-1">Atribuir Cadista</label>
+                  <select 
+                    value={formData.cadista}
+                    onChange={(e) => setFormData({...formData, cadista: e.target.value})}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
+                  >
+                    <option value="Não atribuído">Não atribuído</option>
+                    {cadistasList.map(c => (
+                      <option key={c.id} value={c.nome}>{c.nome}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
-                <label className="block text-slate-400 mb-1">Observações / Comentários Clínicos (Cor, Escala, Instruções)</label>
+                <label className="block text-slate-400 mb-1">Observações / Instruções Clínicas</label>
                 <textarea 
                   rows="2"
-                  placeholder="Ex: Cor A2, cotoquinho gengival mais curto, contato oclusal leve..."
+                  placeholder="Cor, detalhes de preparo, etc."
                   value={formData.observacoes}
                   onChange={(e) => setFormData({...formData, observacoes: e.target.value})}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-slate-200"
                 ></textarea>
               </div>
 
               <div>
-                <label className="block text-slate-400 mb-1">Anexar Escaneamento 3D (.stl, .ply, .zip)</label>
-                <div className="border-2 border-dashed border-slate-700 rounded-xl p-3 text-center bg-slate-900/50 relative cursor-pointer">
-                  <input 
-                    type="file" 
-                    onChange={(e) => setFormData({...formData, arquivo: e.target.files[0]})}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                  />
-                  <UploadCloud className="w-5 h-5 text-slate-400 mx-auto mb-1" />
-                  <p className="text-slate-300 font-medium">
-                    {formData.arquivo ? formData.arquivo.name : "Clique para anexar arquivo 3D"}
-                  </p>
-                </div>
+                <label className="block text-slate-400 mb-1">Arquivo Digital (STL / Escaneamento Intraoral)</label>
+                <input 
+                  type="file" 
+                  onChange={(e) => setFormData({...formData, arquivo: e.target.files[0]})}
+                  className="w-full text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-500"
+                />
               </div>
 
               <div className="pt-2 flex justify-end gap-2">
                 <button type="button" onClick={() => setShowNewOSModal(false)} className="bg-slate-700 text-slate-300 px-4 py-2 rounded-xl">Cancelar</button>
-                <button type="submit" disabled={uploading} className="bg-blue-600 text-white px-5 py-2 rounded-xl font-semibold disabled:opacity-50">
-                  {uploading ? "Salvando..." : "Criar Ordem de Serviço"}
+                <button 
+                  type="submit" 
+                  disabled={uploading}
+                  className="bg-blue-600 hover:bg-blue-500 text-white font-semibold px-4 py-2 rounded-xl flex items-center gap-2"
+                >
+                  {uploading ? 'Enviando Arquivos...' : 'Criar Ordem de Serviço'}
                 </button>
               </div>
             </form>
