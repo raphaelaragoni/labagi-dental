@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, createUserWithEmailAndPassword, signOut } from 'firebase/auth';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
-import { Shield, UserPlus, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
+import { UserPlus, Eye, EyeOff, CheckCircle2 } from 'lucide-react';
 
 export function Cadastrar() {
   const [email, setEmail] = useState('');
@@ -14,7 +14,6 @@ export function Cadastrar() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // Configuração do Firebase (mesma do seu main.jsx)
   const firebaseConfig = {
     apiKey: "AizaSyAFit7yJbO2qdnbLdn16oDOGcj8di-9yoM",
     authDomain: "labagi.firebaseapp.com",
@@ -30,7 +29,6 @@ export function Cadastrar() {
     setLoading(true);
 
     try {
-      // 1. Inicializa uma app secundária isolada para não afetar a sessão do Admin atual
       const secondaryAppName = 'SecondaryRegisterApp';
       const secondaryApp = getApps().find(app => app.name === secondaryAppName) 
         || initializeApp(firebaseConfig, secondaryAppName);
@@ -38,11 +36,9 @@ export function Cadastrar() {
       const secondaryAuth = getAuth(secondaryApp);
       const secondaryDb = getFirestore(secondaryApp);
 
-      // 2. Cria a conta no Firebase Auth secundário
       const userCredential = await createUserWithEmailAndPassword(secondaryAuth, email, password);
       const newUser = userCredential.user;
 
-      // 3. Salva os dados e a role na coleção 'Usuarios' (com 'U' maiúsculo)
       await setDoc(doc(secondaryDb, "Usuarios", newUser.uid), {
         uid: newUser.uid,
         nome: nome,
@@ -51,7 +47,6 @@ export function Cadastrar() {
         createdAt: new Date()
       });
 
-      // 4. Faz logout na instância secundária para limpar e encerra com sucesso
       await signOut(secondaryAuth);
       
       setSuccess(true);
