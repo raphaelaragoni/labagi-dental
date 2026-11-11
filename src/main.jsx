@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Cadastrar } from './Cadastrar';
 import { createRoot } from 'react-dom/client';
 import { initializeApp } from "firebase/app";
 import { 
@@ -49,6 +50,12 @@ import {
   MessageSquare
 } from 'lucide-react';
 
+const urlParams = new URLSearchParams(window.location.search);
+const isCadastrarRoute = window.location.pathname.includes('/cadastrar') || urlParams.has('token');
+
+if (isCadastrarRoute) {
+  return <Cadastrar />;
+}
 const firebaseConfig = {
   apiKey: "AIzaSyAFit7yJbO2QdnbLdnl6oDOGcj8di-9yoM",
   authDomain: "labagi.firebaseapp.com",
